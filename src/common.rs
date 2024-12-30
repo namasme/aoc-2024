@@ -51,3 +51,15 @@ pub fn pairs<T: Clone>(list: &[T]) -> Vec<(T, T)> {
         .flat_map(|(idx, a)| list.iter().skip(idx + 1).map(|b| (a.clone(), b.clone())))
         .collect()
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct Range {
+    pub start: usize,
+    pub size: usize,
+}
+
+impl Range {
+    pub fn end(&self) -> usize {
+        self.start + self.size
+    }
+}
