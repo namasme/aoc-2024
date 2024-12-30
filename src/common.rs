@@ -44,3 +44,10 @@ where
         Some(Cycle { mu, lambda })
     }
 }
+
+pub fn pairs<T: Clone>(list: &[T]) -> Vec<(T, T)> {
+    list.iter()
+        .enumerate()
+        .flat_map(|(idx, a)| list.iter().skip(idx + 1).map(|b| (a.clone(), b.clone())))
+        .collect()
+}
