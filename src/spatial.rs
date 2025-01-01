@@ -11,6 +11,18 @@ impl<T> Point2D<T> {
         Self { x, y }
     }
 
+    pub fn neighbours(&self) -> [Self; 4]
+    where
+        T: From<bool> + Neg<Output = T> + Add<Output = T> + Copy,
+    {
+        [
+            *self + Direction::Up.into(),
+            *self + Direction::Down.into(),
+            *self + Direction::Left.into(),
+            *self + Direction::Right.into(),
+        ]
+    }
+
     pub fn is_parallel(&self, other: &Self) -> bool
     where
         T: Mul<Output = T> + Copy + Eq,
