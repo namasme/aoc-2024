@@ -1,87 +1,21 @@
-use crate::common::Range;
-use std::cmp::min;
+use std::ops::Range;
 use std::str::FromStr;
 
+pub type DiskRange = Range<usize>;
+pub trait FileCompactor {
+    fn checksum(&self) -> usize;
+    fn compact_file(&self, file: &File, gaps: &mut Vec<Gap>) -> Vec<DiskRange>;
+}
+
 pub struct Disk {
-    files: Vec<File>,
+    pub files: Vec<File>,
 }
 
 impl Disk {
-    pub fn compute_whole_checksum(&self) -> usize {
-        let mut gaps = self.gaps();
-        let mut checksum = 0;
-
-        for file in self.files.iter().rev() {
-            let suitable_gap = gaps
-                .iter_mut()
-                .find(|gap| gap.0.size >= file.size() && gap.0.start < file.location.start);
-
-            if let Some(gap) = suitable_gap {
-                checksum += file.partial_checksum(Range {
-                    start: gap.0.start,
-                    size: file.size(),
-                });
-                *gap = gap.claim(file.size());
-            } else {
-                checksum += file.partial_checksum(Range {
-                    start: file.location.start,
-                    size: file.size(),
-                });
-            }
-        }
-
-        checksum
-    }
-
-    pub fn compute_checksum(&self) -> usize {
-        let mut gaps = self.gaps();
-        gaps.reverse();
-        let mut checksum = 0;
-
-        for file in self.files.iter().rev() {
-            let mut total_moved = 0;
-
-            while total_moved < file.size() && !gaps.is_empty() {
-                if gaps.last().unwrap().0.start > file.location.start {
-                    // The gap is actually to the right of the file original location,
-                    // so we can't keep moving blocks
-                    break;
-                }
-
-                let gap = gaps.pop().unwrap();
-
-                let to_move = min(file.size() - total_moved, gap.0.size);
-                checksum += file.partial_checksum(Range {
-                    start: gap.0.start,
-                    size: to_move,
-                });
-                total_moved += to_move;
-
-                if gap.0.size > to_move {
-                    gaps.push(gap.claim(to_move));
-                }
-            }
-
-            if total_moved < file.size() {
-                checksum += file.partial_checksum(Range {
-                    start: file.location.start,
-                    size: file.size() - total_moved,
-                });
-            }
-        }
-
-        checksum
-    }
-
-    fn gaps(&self) -> Vec<Gap> {
+    pub fn gaps(&self) -> Vec<Gap> {
         self.files
-            .iter()
-            .filter_map(|file| {
-                Some(Gap(Range {
-                    start: file.location.end(),
-                    size: file.gap_size?,
-                }))
-            })
+            .windows(2)
+            .map(|files| Gap(files[0].location.end..files[1].location.start))
             .collect()
     }
 }
@@ -106,11 +40,7 @@ impl FromStr for Disk {
         for (id, file_gap) in with_gaps.enumerate() {
             files.push(File {
                 id,
-                location: Range {
-                    start: current_start,
-                    size: file_gap[0]?,
-                },
-                gap_size: Some(file_gap[1]?),
+                location: (current_start..current_start + file_gap[0]?),
             });
 
             current_start += file_gap[0]? + file_gap[1]?;
@@ -125,46 +55,38 @@ impl FromStr for Disk {
         let id = files.len();
         files.push(File {
             id,
-            location: Range {
-                start: current_start,
-                size: last_file_size?,
-            },
-            gap_size: None,
+            location: current_start..current_start + last_file_size?,
         });
 
         Ok(Disk { files })
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct File {
+#[derive(Clone)]
+pub struct File {
     id: usize,
-    location: Range,
-    gap_size: Option<usize>,
+    pub location: DiskRange,
 }
 
 impl File {
-    fn partial_checksum(&self, range: Range) -> usize {
-        if range.size == 0 {
+    pub fn partial_checksum(&self, range: &DiskRange) -> usize {
+        if range.len() == 0 {
             return 0;
         }
 
-        self.id * (range.start * range.size + ((range.size - 1) * range.size) / 2)
+        self.id * (range.start * range.len() + ((range.len() - 1) * range.len()) / 2)
     }
 
-    fn size(&self) -> usize {
-        self.location.size
+    pub fn size(&self) -> usize {
+        self.location.len()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Gap(Range);
+#[derive(Debug, Clone)]
+pub struct Gap(pub DiskRange);
 
 impl Gap {
-    fn claim(&self, space: usize) -> Self {
-        Self(Range {
-            start: self.0.start + space,
-            size: self.0.size - space,
-        })
+    pub fn claim(&self, space: usize) -> Self {
+        Self(self.0.start + space..self.0.end)
     }
 }
