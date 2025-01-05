@@ -1,49 +1,11 @@
+use crate::parse::TextGrid;
 use crate::spatial::Point2D;
+use crate::spatial::Point2DCast;
 use std::iter;
+use std::str::FromStr;
 
 pub struct Puzzle {
     text_grid: TextGrid,
-}
-
-pub struct TextGrid {
-    content: String,
-    width: usize,
-}
-
-impl TextGrid {
-    fn idx_to_coordinates(&self, idx: usize) -> Position {
-        let column = idx % (self.width + 1);
-        let row = idx / (self.width + 1);
-
-        Point2D::new(column as Coordinate, row as Coordinate)
-    }
-
-    fn coordinates_to_index(&self, position: Position) -> Option<usize> {
-        if position.x < 0 || position.y < 0 || (position.x as usize) >= self.width {
-            return None;
-        }
-
-        let candidate = (self.width + 1) * (position.y as usize) + (position.x as usize);
-        if candidate >= self.content.len() {
-            return None;
-        }
-
-        return Some(candidate);
-    }
-
-    fn char_at(&self, position: Position) -> Option<char> {
-        self.coordinates_to_index(position)
-            .map(|idx| self.content.as_bytes()[idx] as char)
-    }
-
-    fn parse(input: String) -> Self {
-        let width = input.find('\n').unwrap();
-
-        Self {
-            content: input,
-            width,
-        }
-    }
 }
 
 pub trait PatternSpotter {
@@ -65,7 +27,12 @@ impl WordPattern {
         let ray = iter::successors(Some(*start), |&current| {
             Some(current + direction.as_delta())
         })
-        .map(|position| text_grid.char_at(position));
+        .map(|position| {
+            position
+                .cast()
+                .ok()
+                .and_then(|position| text_grid.char_at(position))
+        });
 
         self.word
             .chars()
@@ -81,28 +48,23 @@ impl PatternSpotter for WordPattern {
     fn find_pattern_occurrences(&self, text_grid: &TextGrid) -> Vec<Self::Occurrence> {
         let first = self.word.as_bytes()[0] as char;
         text_grid
-            .content
-            .char_indices()
-            .map(|(idx, letter)| {
+            .iter()
+            .map(|(position, letter)| {
                 if letter != first {
                     return vec![];
                 }
 
-                let start = text_grid.idx_to_coordinates(idx);
-                vec![
-                    Direction::N,
-                    Direction::NE,
-                    Direction::E,
-                    Direction::SE,
-                    Direction::S,
-                    Direction::SW,
-                    Direction::W,
-                    Direction::NW,
-                ]
-                .iter()
-                .filter(|direction| self.match_word(text_grid, &start, direction))
-                .map(|direction| (start, *direction))
-                .collect()
+                Direction::all()
+                    .iter()
+                    .filter(|direction| {
+                        position
+                            .cast()
+                            .ok()
+                            .map(|position| self.match_word(text_grid, &position, direction))
+                            .unwrap_or(false)
+                    })
+                    .map(|direction| (position.cast().unwrap(), *direction))
+                    .collect()
             })
             .flatten()
             .collect()
@@ -116,17 +78,14 @@ impl PatternSpotter for CrossMASPattern {
 
     fn find_pattern_occurrences(&self, text_grid: &TextGrid) -> Vec<Self::Occurrence> {
         text_grid
-            .content
-            .char_indices()
-            .filter_map(|(idx, letter)| {
+            .iter()
+            .filter_map(|(position, letter)| {
                 if letter != 'A' {
                     return None;
                 }
 
-                let start = text_grid.idx_to_coordinates(idx);
-
-                if self.match_cross_mas(text_grid, start) {
-                    Some(start)
+                if self.match_cross_mas(text_grid, position.cast().ok()?) {
+                    Some(position.cast().unwrap())
                 } else {
                     None
                 }
@@ -141,14 +100,9 @@ impl CrossMASPattern {
     }
 
     fn match_cross_mas(&self, text_grid: &TextGrid, start: Position) -> bool {
-        let ne = text_grid.char_at(start + Direction::NE.as_delta());
-        let se = text_grid.char_at(start + Direction::SE.as_delta());
-        let sw = text_grid.char_at(start + Direction::SW.as_delta());
-        let nw = text_grid.char_at(start + Direction::NW.as_delta());
-
-        let corners: String = vec![ne, se, sw, nw]
+        let corners: String = vec![Direction::NE, Direction::SE, Direction::SW, Direction::NW]
             .iter()
-            .filter_map(Option::as_ref)
+            .filter_map(|direction| text_grid.char_at((start + direction.as_delta()).cast().ok()?))
             .collect();
 
         if corners.len() < 4 {
@@ -181,6 +135,19 @@ pub enum Direction {
 }
 
 impl Direction {
+    fn all() -> [Self; 8] {
+        [
+            Self::N,
+            Self::NE,
+            Self::E,
+            Self::SE,
+            Self::S,
+            Self::SW,
+            Self::W,
+            Self::NW,
+        ]
+    }
+
     fn as_delta(&self) -> Point2D<Coordinate> {
         match self {
             Direction::N => Point2D::new(0, -1),
@@ -202,10 +169,14 @@ impl Puzzle {
     ) -> Vec<T::Occurrence> {
         pattern_spotter.find_pattern_occurrences(&self.text_grid)
     }
+}
 
-    pub fn parse(input: String) -> Self {
-        Self {
-            text_grid: TextGrid::parse(input),
-        }
+impl FromStr for Puzzle {
+    type Err = <TextGrid as FromStr>::Err;
+
+    fn from_str(input: &str) -> Result<Self, <TextGrid as FromStr>::Err> {
+        Ok(Self {
+            text_grid: input.parse()?,
+        })
     }
 }

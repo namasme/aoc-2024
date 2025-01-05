@@ -51,6 +51,22 @@ impl<T> Point2D<T> {
     }
 }
 
+pub trait Point2DCast<T: TryInto<U>, U> {
+    fn cast(self) -> Result<Point2D<U>, <T as TryInto<U>>::Error>;
+}
+
+impl<T, U> Point2DCast<T, U> for Point2D<T>
+where
+    T: TryInto<U>,
+{
+    fn cast(self) -> Result<Point2D<U>, <T as TryInto<U>>::Error> {
+        Ok(Point2D {
+            x: self.x.try_into()?,
+            y: self.y.try_into()?,
+        })
+    }
+}
+
 impl<T> Add for Point2D<T>
 where
     T: Add<Output = T> + Copy,
