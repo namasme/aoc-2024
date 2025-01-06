@@ -39,15 +39,21 @@ impl<T> Point2D<T> {
 
     pub fn is_between(&self, first: &Point2D<T>, second: &Point2D<T>) -> bool
     where
-        T: PartialOrd,
+        T: Add<Output = T>
+            + Copy
+            + Copy
+            + Eq
+            + From<bool>
+            + Mul<Output = T>
+            + PartialOrd
+            + Sub<Output = T>,
     {
-        ((first.x <= self.x && self.x <= second.x || second.x <= self.x && self.x <= first.x)
-            && self.y == first.y
-            && self.y == second.y)
-            || (((first.y <= self.y && self.y <= second.y)
-                || (second.y <= self.y && self.y <= first.y))
-                && self.x == first.x
-                && self.x == second.x)
+        let to_self = *self - *first;
+        let to_second = *second - *first;
+
+        to_self.is_parallel(&to_second) // vectors live in the same line
+                && to_self.dot(&to_second) >= T::from(false) // point in the same direction
+                && to_self.dot(&to_self) <= to_second.dot(&to_second) // first is closer to self than to second
     }
 }
 
@@ -144,16 +150,8 @@ impl<T: From<bool> + Neg<Output = T>> From<Direction> for Point2D<T> {
 }
 
 impl Direction {
-    pub fn as_delta<T>(&self) -> Point2D<T>
-    where
-        T: From<i32>,
-    {
-        match self {
-            Direction::Up => Point2D::new(T::from(0), T::from(1)),
-            Direction::Down => Point2D::new(T::from(0), T::from(-1)),
-            Direction::Left => Point2D::new(T::from(-1), T::from(0)),
-            Direction::Right => Point2D::new(T::from(1), T::from(0)),
-        }
+    pub fn all() -> [Self; 4] {
+        [Self::Up, Self::Down, Self::Left, Self::Right]
     }
 
     pub fn rotate(self, orientation: Orientation) -> Self {
