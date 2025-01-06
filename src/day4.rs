@@ -27,12 +27,7 @@ impl WordPattern {
         let ray = iter::successors(Some(*start), |&current| {
             Some(current + direction.as_delta())
         })
-        .map(|position| {
-            position
-                .cast()
-                .ok()
-                .and_then(|position| text_grid.char_at(position))
-        });
+        .map(|position| text_grid.char_at(position));
 
         self.word
             .chars()
@@ -57,11 +52,7 @@ impl PatternSpotter for WordPattern {
                 Direction::all()
                     .iter()
                     .filter(|direction| {
-                        position
-                            .cast()
-                            .ok()
-                            .map(|position| self.match_word(text_grid, &position, direction))
-                            .unwrap_or(false)
+                        self.match_word(text_grid, &position.cast().unwrap(), direction)
                     })
                     .map(|direction| (position.cast().unwrap(), *direction))
                     .collect()
@@ -102,7 +93,7 @@ impl CrossMASPattern {
     fn match_cross_mas(&self, text_grid: &TextGrid, start: Position) -> bool {
         let corners: String = vec![Direction::NE, Direction::SE, Direction::SW, Direction::NW]
             .iter()
-            .filter_map(|direction| text_grid.char_at((start + direction.as_delta()).cast().ok()?))
+            .filter_map(|direction| text_grid.char_at(start + direction.as_delta()))
             .collect();
 
         if corners.len() < 4 {

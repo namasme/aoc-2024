@@ -4,7 +4,6 @@ use std::str::FromStr;
 
 use aoc_2024::parse::TextGrid;
 use aoc_2024::spatial::Point2D;
-use aoc_2024::spatial::Point2DCast;
 
 fn main() {
     let input = fs::read_to_string("data/day12/input").unwrap();
@@ -47,7 +46,7 @@ impl Farm {
     }
 
     fn as_region(&self, start: Position) -> Region {
-        let plant_label = self.text_grid.char_at(start.cast().unwrap()).unwrap();
+        let plant_label = self.text_grid.char_at(start).unwrap();
         let mut pending = vec![start];
         let mut plots = HashSet::from([start]);
         let mut seen = HashSet::from([start]);
@@ -70,10 +69,8 @@ impl Farm {
     }
 
     fn is_in_region(&self, position: &Position, label: char) -> bool {
-        position
-            .cast()
-            .ok()
-            .and_then(|position| self.text_grid.char_at(position))
+        self.text_grid
+            .char_at(*position)
             .map(|c| c == label)
             .unwrap_or(false)
     }

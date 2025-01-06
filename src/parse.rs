@@ -1,4 +1,5 @@
 use crate::spatial::Point2D;
+use crate::spatial::Point2DCast;
 use std::str::FromStr;
 
 pub struct TextGrid {
@@ -8,9 +9,11 @@ pub struct TextGrid {
 }
 
 impl TextGrid {
-    pub fn char_at(&self, position: Point2D<usize>) -> Option<char> {
-        self.coordinates_to_index(position)
-            .map(|idx| self.content.as_bytes()[idx] as char)
+    pub fn char_at<T: TryInto<usize>>(&self, position: Point2D<T>) -> Option<char> {
+        position.cast().ok().and_then(|position| {
+            self.coordinates_to_index(position)
+                .map(|idx| self.content.as_bytes()[idx] as char)
+        })
     }
 
     pub fn iter(&self) -> TextGridIter<'_> {
