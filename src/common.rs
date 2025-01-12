@@ -51,3 +51,24 @@ pub fn pairs<T: Clone>(list: &[T]) -> Vec<(T, T)> {
         .flat_map(|(idx, a)| list.iter().skip(idx + 1).map(|b| (a.clone(), b.clone())))
         .collect()
 }
+
+/// Calculates r, s, t such that s * a + t * b = r = gcd(a, b)
+pub fn bezout(a: usize, b: usize) -> (usize, isize, isize) {
+    // Taken from https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Pseudocode
+    let (mut r_0, mut r_1) = (a, b);
+    let (mut s_0, mut s_1) = (1, 0);
+    let (mut t_0, mut t_1) = (0, 1);
+
+    while r_1 != 0 {
+        let q = (r_0 / r_1) as isize;
+        let r = r_0 % r_1;
+        let s = s_0 - q * s_1;
+        let t = t_0 - q * t_1;
+
+        (r_0, r_1) = (r_1, r);
+        (s_0, s_1) = (s_1, s);
+        (t_0, t_1) = (t_1, t);
+    }
+
+    (r_0, s_0, t_0)
+}
