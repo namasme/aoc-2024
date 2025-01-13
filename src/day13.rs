@@ -3,6 +3,8 @@ use std::str::FromStr;
 use crate::common::bezout;
 use crate::spatial::{Point2D, Point2DCast};
 
+const PART_2_PRIZE_DELTA: usize = 10000000000000;
+
 pub fn parse_input(input: &str) -> Vec<Machine> {
     input
         .split("\n\n")
@@ -10,14 +12,14 @@ pub fn parse_input(input: &str) -> Vec<Machine> {
         .collect()
 }
 
-type Position = Point2D<Coordinate>;
+pub type Position = Point2D<Coordinate>;
 type Move = Point2D<Coordinate>;
 type Coordinate = usize;
 
 pub struct Machine {
-    button_a: Move,
-    button_b: Move,
-    prize: Position,
+    pub button_a: Move,
+    pub button_b: Move,
+    pub prize: Position,
 }
 
 impl Machine {
@@ -31,6 +33,22 @@ impl Machine {
             a: self.button_a.y,
             b: self.button_b.y,
             c: self.prize.y,
+        };
+
+        eq_a.intersect(&eq_b)
+            .map(|solution| 3 * solution.x + solution.y)
+    }
+
+    pub fn required_tokens_adjusted(&self) -> Option<usize> {
+        let eq_a = PositiveDiophantineEquation {
+            a: self.button_a.x,
+            b: self.button_b.x,
+            c: self.prize.x + PART_2_PRIZE_DELTA,
+        };
+        let eq_b = PositiveDiophantineEquation {
+            a: self.button_a.y,
+            b: self.button_b.y,
+            c: self.prize.y + PART_2_PRIZE_DELTA,
         };
 
         eq_a.intersect(&eq_b)
@@ -66,7 +84,6 @@ impl FromStr for Machine {
 
 /// Represents the equation α * a + β * b = c / a, b, c >= 0
 /// Solves for α, β >= 0
-#[derive(Debug)]
 struct PositiveDiophantineEquation {
     a: Coordinate,
     b: Coordinate,
