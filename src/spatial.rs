@@ -13,14 +13,28 @@ impl<T> Point2D<T> {
 
     pub fn neighbours(&self) -> [Self; 4]
     where
-        T: From<bool> + Neg<Output = T> + Add<Output = T> + Copy,
+        T: From<bool> + Sub<Output = T> + Add<Output = T> + Copy,
     {
+        let one = T::from(true);
         [
-            *self + Direction::Up.into(),
-            *self + Direction::Down.into(),
-            *self + Direction::Left.into(),
-            *self + Direction::Right.into(),
+            Point2D::new(self.x, self.y + one),
+            Point2D::new(self.x + one, self.y),
+            Point2D::new(self.x, self.y - one),
+            Point2D::new(self.x - one, self.y),
         ]
+    }
+
+    pub fn advance(&self, direction: Direction) -> Self
+    where
+        T: From<bool> + Sub<Output = T> + Add<Output = T> + Copy,
+    {
+        let one = T::from(true);
+        match direction {
+            Direction::Up => Point2D::new(self.x, self.y + one),
+            Direction::Right => Point2D::new(self.x + one, self.y),
+            Direction::Down => Point2D::new(self.x, self.y - one),
+            Direction::Left => Point2D::new(self.x - one, self.y),
+        }
     }
 
     pub fn is_parallel(&self, other: &Self) -> bool
