@@ -180,6 +180,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+
     use crate::spatial::Point2D;
 
     struct Grid {
@@ -187,16 +189,17 @@ mod tests {
         height: u8,
     }
 
+    impl Grid {
+        fn is_valid(&self, node: &Point2D<i8>) -> bool {
+            node.x >= 0 && node.y >= 0 && node.x < self.width as i8 && node.y < self.height as i8
+        }
+    }
+
     impl WeightedGraph<Point2D<i8>, u8> for Grid {
         fn neighbours(&self, node: &Point2D<i8>) -> Vec<(u8, Point2D<i8>)> {
             node.neighbours()
                 .into_iter()
-                .filter(|neighbour| {
-                    neighbour.x >= 0
-                        && neighbour.y >= 0
-                        && neighbour.x < self.width as i8
-                        && neighbour.y < self.height as i8
-                })
+                .filter(|neighbour| self.is_valid(neighbour))
                 .map(|neighbour| (1, neighbour))
                 .collect()
         }
@@ -283,5 +286,70 @@ mod tests {
         for expected_path in expected_paths {
             assert!(paths.contains(&expected_path));
         }
+    }
+
+    struct Maze {
+        grid: Grid,
+        blocks: HashSet<Point2D<i8>>,
+    }
+
+    impl Maze {
+        fn from(raw_maze: &str, block_tile: char) -> Self {
+            let mut obstacles = HashSet::new();
+
+            for (row, line) in raw_maze.lines().rev().enumerate() {
+                for (column, tile) in line.chars().enumerate() {
+                    let position = Point2D::new(column as i8, row as i8);
+                    match tile {
+                        _ if tile == block_tile => {
+                            obstacles.insert(position);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let grid = Grid {
+                width: raw_maze.lines().next().unwrap().len() as u8,
+                height: raw_maze.lines().count() as u8,
+            };
+
+            Self {
+                grid,
+                blocks: obstacles,
+            }
+        }
+    }
+
+    impl WeightedGraph<Point2D<i8>, u8> for Maze {
+        fn neighbours(&self, node: &Point2D<i8>) -> Vec<(u8, Point2D<i8>)> {
+            node.neighbours()
+                .into_iter()
+                .filter(|neighbour| {
+                    self.grid.is_valid(neighbour) && !self.blocks.contains(neighbour)
+                })
+                .map(|neighbour| (1, neighbour))
+                .collect()
+        }
+    }
+
+    #[test]
+    fn reachability() {
+        let raw_maze = r"
+...#...
+.##..##
+.#..#..
+...#..#
+###..##
+.##.###
+#.#....
+"
+        .trim();
+        let maze = Maze::from(raw_maze, '#');
+        let start = Point2D::new(0, 0);
+        let target = Point2D::new((maze.grid.width - 1) as i8, (maze.grid.height - 1) as i8);
+        let result = maze.traverse(&[start], |&node| node == target);
+        let is_reachable = result.distances.contains_key(&target);
+
+        assert!(!is_reachable);
     }
 }
