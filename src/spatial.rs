@@ -1,4 +1,6 @@
+use std::cmp::{max, min};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::panic::catch_unwind;
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Point2D<T> {
@@ -6,14 +8,14 @@ pub struct Point2D<T> {
     pub y: T,
 }
 
-impl<T> Point2D<T> {
+impl<T: Copy> Point2D<T> {
     pub fn new(x: T, y: T) -> Self {
         Self { x, y }
     }
 
     pub fn neighbours(&self) -> [Self; 4]
     where
-        T: From<bool> + Sub<Output = T> + Add<Output = T> + Copy,
+        T: From<bool> + Sub<Output = T> + Add<Output = T>,
     {
         let one = T::from(true);
         [
@@ -26,7 +28,7 @@ impl<T> Point2D<T> {
 
     pub fn advance(&self, direction: Direction) -> Self
     where
-        T: From<bool> + Sub<Output = T> + Add<Output = T> + Copy,
+        T: From<bool> + Sub<Output = T> + Add<Output = T>,
     {
         let one = T::from(true);
         match direction {
@@ -39,28 +41,21 @@ impl<T> Point2D<T> {
 
     pub fn is_parallel(&self, other: &Self) -> bool
     where
-        T: Mul<Output = T> + Copy + Eq,
+        T: Mul<Output = T> + Eq,
     {
         self.x * other.y == self.y * other.x
     }
 
     pub fn dot(&self, other: &Self) -> T
     where
-        T: Add<Output = T> + Mul<Output = T> + Copy,
+        T: Add<Output = T> + Mul<Output = T>,
     {
         self.x * other.x + self.y * other.y
     }
 
     pub fn is_between(&self, first: &Point2D<T>, second: &Point2D<T>) -> bool
     where
-        T: Add<Output = T>
-            + Copy
-            + Copy
-            + Eq
-            + From<bool>
-            + Mul<Output = T>
-            + PartialOrd
-            + Sub<Output = T>,
+        T: Add<Output = T> + Eq + From<bool> + Mul<Output = T> + PartialOrd + Sub<Output = T>,
     {
         let to_self = *self - *first;
         let to_second = *second - *first;
@@ -68,6 +63,48 @@ impl<T> Point2D<T> {
         to_self.is_parallel(&to_second) // vectors live in the same line
                 && to_self.dot(&to_second) >= T::from(false) // point in the same direction
                 && to_self.dot(&to_self) <= to_second.dot(&to_second) // first is closer to self than to second
+    }
+
+    pub fn manhattan_distance(&self, other: &Self) -> T
+    where
+        T: Add<Output = T> + Sub<Output = T> + Ord,
+    {
+        let delta_x = max(self.x, other.x) - min(self.x, other.x);
+        let delta_y = max(self.y, other.y) - min(self.y, other.y);
+
+        delta_x + delta_y
+    }
+
+    pub fn l1_ball(&self, radius: usize) -> Vec<Self>
+    where
+        T: Add<Output = T> + Eq + From<bool> + Ord + TryFrom<usize> + Sub<Output = T>,
+    {
+        // There is likely a better way to do this
+        let is_signed = catch_unwind(|| T::from(false) - T::from(true)).is_ok();
+
+        (0..=radius + radius)
+            .flat_map(|delta_x| {
+                let remaining = radius - (max(radius, delta_x) - min(radius, delta_x));
+                (0..=remaining + remaining).filter_map(move |delta_y| {
+                    let dx = delta_x.try_into().ok()?;
+                    let dy = delta_y.try_into().ok()?;
+                    let radius_t = radius.try_into().ok()?;
+                    let remaining_t = remaining.try_into().ok()?;
+                    //println!("delta_x: {}, delta_y: {}", delta_x, delta_y);
+                    if delta_x == radius && delta_y == remaining
+                        || (!is_signed && (self.x + dx < radius_t || self.y + dy < remaining_t))
+                    {
+                        //println!("none");
+                        None
+                    } else {
+                        Some(Point2D::new(
+                            self.x + dx - radius_t,
+                            self.y + dy - remaining_t,
+                        ))
+                    }
+                })
+            })
+            .collect()
     }
 }
 
@@ -190,4 +227,77 @@ impl Direction {
 pub enum Orientation {
     Clockwise,
     Counterclockwise,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_elements_match<T: Eq>(expected: Vec<T>, actual: Vec<T>) {
+        assert_eq!(expected.len(), actual.len());
+
+        for element in actual {
+            assert!(expected.contains(&element));
+        }
+    }
+
+    #[test]
+    fn test_ball_unsigned() {
+        let p = Point2D::new(0u8, 0u8);
+        let l1_ball = p.l1_ball(1);
+        let expected = vec![Point2D::new(0, 1), Point2D::new(1, 0)];
+
+        assert_elements_match(expected, l1_ball);
+    }
+
+    #[test]
+    fn test_ball_signed() {
+        let p = Point2D::new(0i8, 0i8);
+        let l1_ball = p.l1_ball(1);
+        let expected = vec![
+            Point2D::new(0, 1),
+            Point2D::new(1, 0),
+            Point2D::new(0, -1),
+            Point2D::new(-1, 0),
+        ];
+
+        assert_elements_match(expected, l1_ball);
+    }
+
+    #[test]
+    fn test_ball_unsigned_big() {
+        let p = Point2D::new(0u8, 0u8);
+        let l1_ball = p.l1_ball(2);
+        let expected = vec![
+            Point2D::new(0, 1),
+            Point2D::new(1, 0),
+            Point2D::new(0, 2),
+            Point2D::new(1, 1),
+            Point2D::new(2, 0),
+        ];
+
+        assert_elements_match(expected, l1_ball);
+    }
+
+    #[test]
+    fn test_ball_signed_big() {
+        let p = Point2D::new(0i8, 0i8);
+        let l1_ball = p.l1_ball(2);
+        let expected = vec![
+            Point2D::new(0, 1),
+            Point2D::new(1, 0),
+            Point2D::new(0, 2),
+            Point2D::new(1, 1),
+            Point2D::new(2, 0),
+            Point2D::new(0, -1),
+            Point2D::new(-1, 0),
+            Point2D::new(0, -2),
+            Point2D::new(-1, -1),
+            Point2D::new(-2, 0),
+            Point2D::new(-1, 1),
+            Point2D::new(1, -1),
+        ];
+
+        assert_elements_match(expected, l1_ball);
+    }
 }
